@@ -9,11 +9,13 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun HomeScreen(
     onManual: () -> Unit,
-    onHistory: () -> Unit
+    onHistory: () -> Unit,
+    onScan: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("ID Demo", style = MaterialTheme.typography.titleLarge)
         Button(onClick = onManual, modifier = Modifier.fillMaxWidth()) { Text("Manual Input") }
+        Button(onClick = onScan, modifier = Modifier.fillMaxWidth()) { Text("Upload Photo") } //
         Button(onClick = onHistory, modifier = Modifier.fillMaxWidth()) { Text("History") }
     }
 }

@@ -16,4 +16,15 @@ class HistoryRepository(private val dao: HistoryDao) {
             )
         )
     }
+    suspend fun insertScan(docType: String, dataJson: String, imageUri: String?) {
+        dao.insert(
+            HistoryEntity(
+                docType = docType,
+                mode = "SCAN",
+                dataJson = dataJson,
+                imageUri = imageUri
+            )
+        )
+    }
+
 }
