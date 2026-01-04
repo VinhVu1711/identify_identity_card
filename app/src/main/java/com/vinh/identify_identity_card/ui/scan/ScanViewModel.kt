@@ -15,7 +15,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-
+import android.util.Log
+private const val TAG = "ScanVM"
 class ScanViewModel(
     private val scanRepo: ScanRepository,
     private val historyRepo: HistoryRepository
@@ -41,7 +42,7 @@ class ScanViewModel(
 
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
-    fun selectDocType(type: DocumentType) { selectedDocType = type }
+//    fun selectDocType(type: DocumentType) { selectedDocType = type }
 
     fun setImage(uri: Uri) { imageUri = uri }
 
@@ -51,64 +52,64 @@ class ScanViewModel(
 //
 //    fun setUiHint(msg: String) { uiHint = msg }
 //    fun clearUiHint() { uiHint = null }
+var frontUri by mutableStateOf<Uri?>(null)
+    private set
+    var backUri by mutableStateOf<Uri?>(null)
+        private set
 
-    fun scan(context: Context, uri: Uri, onSuccess: () -> Unit) {
+    fun setFront(uri: Uri) { frontUri = uri }
+    fun setBack(uri: Uri) { backUri = uri }
+    fun scanFrontBack(context: Context, onSuccess: () -> Unit) {
+        val fUri = frontUri ?: run { error = "Chưa chọn mặt trước"; return }
+        val bUri = backUri ?: run { error = "Chưa chọn mặt sau"; return }
+
         viewModelScope.launch {
             try {
-                error = null
                 isLoading = true
-                imageUri = uri
+                error = null
 
-                val file = withContext(Dispatchers.IO) { uriToTempFile(context, uri) }
+                val fMime = context.contentResolver.getType(fUri) ?: "image/jpeg"
+                val bMime = context.contentResolver.getType(bUri) ?: "image/jpeg"
 
-                val raw = withContext(Dispatchers.IO) { scanRepo.scan(selectedDocType, file) }
+                val fFile = withContext(Dispatchers.IO) { uriToTempFile(context, fUri) }
+                val bFile = withContext(Dispatchers.IO) { uriToTempFile(context, bUri) }
 
-                if (selectedDocType == DocumentType.IDENTITYCARD) {
-                    val dto = json.decodeFromString(IdentityCardScanDto.serializer(), raw)
+                Log.d("ScanVM", "📸 Front uri=$fUri")
+                Log.d("ScanVM", "📸 Back uri=$bUri")
+                Log.d("ScanVM", "Front mime=$fMime Back mime=$bMime")
+                Log.d("ScanVM", "Front file=${fFile.length()} bytes")
+                Log.d("ScanVM", "Back file=${bFile.length()} bytes")
 
-                    val mapped = IdentityCardInfo(
-                        idNumber = dto.idNumber,
-                        fullName = dto.fullName,
-                        dateOfBirth = parseDdMmYyyyToMillis(dto.dateOfBirth),
-                        gender = dto.gender,
-                        nationality = dto.nationality,
-                        placeOfOrigin = dto.placeOfOrigin,
-                        placeOfResidence = dto.placeOfResidence,
-                        expiryDate = parseDdMmYyyyToMillis(dto.expiryDate),
-                        issueDate = parseDdMmYyyyToMillis(dto.issueDate),
-                        issuePlace = dto.issuePlace
-                    )
+                Log.d("ScanVM", "📤 Calling scanRepo.scanCccdFrontBack()")
 
-                    // ✅ check “đủ thông tin”
-                    if (!isIdentityCardComplete(mapped)) {
-                        error = "Không trích xuất đủ thông tin. Hãy chụp lại ảnh rõ nét hơn."
-                        return@launch
-                    }
+                val raw = withContext(Dispatchers.IO) {
+                    scanRepo.scanCccdFrontBack(fFile, fMime, bFile, bMime)
+                }
+                Log.d("ScanVM", "📥 RAW RESPONSE:\n${raw.take(1500)}")
 
-                    identityCardForm = mapped
-                } else {
-                    val dto = json.decodeFromString(PassportScanDto.serializer(), raw)
 
-                    val mapped = PassportInfo(
-                        idNumber = dto.idNumber,
-                        fullName = dto.fullName,
-                        dateOfBirth = parseDdMmYyyyToMillis(dto.dateOfBirth),
-                        gender = dto.gender,
-                        nationality = dto.nationality,
-                        passportNumber = dto.passportNumber,
-                        expiryDate = parseDdMmYyyyToMillis(dto.expiryDate),
-                        issueDate = parseDdMmYyyyToMillis(dto.issueDate),
-                        issuingAuthority = dto.issuingAuthority
-                    )
+                val dto = json.decodeFromString(IdentityCardScanDto.serializer(), raw)
 
-                    if (!isPassportComplete(mapped)) {
-                        error = "Không trích xuất đủ thông tin. Hãy chụp lại ảnh rõ nét hơn."
-                        return@launch
-                    }
+                val mapped = IdentityCardInfo(
+                    idNumber = dto.idNumber,
+                    fullName = dto.fullName,
+                    dateOfBirth = parseDdMmYyyyToMillis(dto.dateOfBirth),
+                    gender = dto.gender,
+                    nationality = dto.nationality,
+                    placeOfOrigin = dto.placeOfOrigin,
+                    placeOfResidence = dto.placeOfResidence,
+                    issueDate = parseDdMmYyyyToMillis(dto.issueDate),
+                    expiryDate = parseDdMmYyyyToMillis(dto.expiryDate),
+                    issuePlace = dto.issuePlace
+                )
 
-                    passportForm = mapped
+                // Giờ bạn có thể check "critical" thôi
+                if (mapped.idNumber.isNullOrBlank() || mapped.fullName.isNullOrBlank()) {
+                    error = "Không đọc được trường quan trọng. Hãy chụp rõ hơn."
+                    return@launch
                 }
 
+                identityCardForm = mapped
                 onSuccess()
             } catch (e: Exception) {
                 error = "Scan thất bại: ${e.message}"
@@ -117,6 +118,9 @@ class ScanViewModel(
             }
         }
     }
+
+
+
 
     fun saveToHistory() {
         viewModelScope.launch {
@@ -140,6 +144,62 @@ class ScanViewModel(
             }
         }
     }
+
+    var passportUri by mutableStateOf<Uri?>(null)
+        private set
+
+
+    fun setPassport(uri: Uri?) { passportUri = uri }
+
+    fun clearPickedImages() {
+        frontUri = null
+        backUri = null
+        passportUri = null
+    }
+    fun selectDocType(type: DocumentType) {
+        selectedDocType = type
+        clearPickedImages()
+    }
+    fun scanPassportOne(context: Context, onSuccess: () -> Unit) {
+        val pUri = passportUri ?: run { error = "Chưa chọn ảnh passport"; return }
+
+        viewModelScope.launch {
+            try {
+                isLoading = true
+                error = null
+
+                val mime = context.contentResolver.getType(pUri) ?: "image/jpeg"
+                val file = withContext(Dispatchers.IO) { uriToTempFile(context, pUri) }
+
+                val raw = withContext(Dispatchers.IO) {
+                    scanRepo.scanPassportOne(file, mime)
+                }
+
+                val dto = json.decodeFromString(PassportScanDto.serializer(), raw)
+
+                val mapped = PassportInfo(
+                    idNumber = dto.idNumber,
+                    fullName = dto.fullName,
+                    dateOfBirth = parseDdMmYyyyToMillis(dto.dateOfBirth),
+                    gender = dto.gender,
+                    nationality = dto.nationality,
+                    passportNumber = dto.passportNumber,
+                    issueDate = parseDdMmYyyyToMillis(dto.issueDate),
+                    expiryDate = parseDdMmYyyyToMillis(dto.expiryDate),
+                    issuingAuthority = dto.issuingAuthority
+                )
+
+                passportForm = mapped
+                onSuccess()
+            } catch (e: Exception) {
+                error = "Scan thất bại: ${e.message}"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+
 
     private fun isIdentityCardComplete(f: IdentityCardInfo): Boolean {
         return !f.idNumber.isNullOrBlank()

@@ -12,8 +12,7 @@ data class GeminiGenerateRequest(
 @Serializable
 data class GeminiGenerationConfig(
     val temperature: Double? = 0.0,
-    val maxOutputTokens: Int? = 1024,
-    val responseMimeType: String? = "application/json" // ✅ BẮT BUỘC
+    val maxOutputTokens: Int? = 1024
 )
 
 @Serializable
@@ -22,33 +21,31 @@ data class GeminiContent(
     val parts: List<GeminiPart>
 )
 
-//@Serializable
-//sealed class GeminiPart {
-//    @Serializable
-//    data class TextPart(val text: String) : GeminiPart()
-//
-//    @Serializable
-//    data class InlineDataPart(
-//        @SerialName("inlineData") val inlineData: InlineData
-//    ) : GeminiPart()
-//
-//    @Serializable
-//    data class InlineData(
-//        @SerialName("mimeType") val mimeType: String,
-//        val data: String
-//    )
-//}
+/**
+ * ✅ KHÔNG sealed class nữa để tránh kotlinx tự sinh "type"
+ * Part hợp lệ của Gemini:
+ * - { "text": "..." }
+ * - { "inline_data": { "mime_type": "...", "data": "..." } }
+ */
 @Serializable
 data class GeminiPart(
     val text: String? = null,
-    @SerialName("inlineData") val inlineData: InlineData? = null
-)
 
-@Serializable
-data class InlineData(
-    @SerialName("mimeType") val mimeType: String,
-    val data: String
-)
+    @SerialName("inline_data")
+    val inlineData: InlineData? = null
+) {
+    @Serializable
+    data class InlineData(
+        @SerialName("mime_type") val mimeType: String,
+        val data: String
+    )
+
+    companion object {
+        fun text(t: String) = GeminiPart(text = t)
+        fun inline(mime: String, b64: String) =
+            GeminiPart(inlineData = InlineData(mimeType = mime, data = b64))
+    }
+}
 
 @Serializable
 data class GeminiGenerateResponse(

@@ -6,7 +6,10 @@ sealed class Screen(val route: String) {
     data object History : Screen("history")
 
 
-    data object ScanEntry : Screen("scan_entry")
-    data object ScanCapture : Screen("scan_capture")
+//    data object ScanEntry : Screen("scan_entry")
+//    data object ScanCapture : Screen("scan_capture")
     data object ScanResult : Screen("scan_result")
+//    data object ScanUploadBoth : Screen("scan_upload_both")
+    data object ScanUpload : Screen("scan_upload")
+
 }

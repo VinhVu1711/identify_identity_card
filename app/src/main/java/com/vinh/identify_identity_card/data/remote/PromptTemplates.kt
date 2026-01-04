@@ -5,11 +5,17 @@ import com.vinh.identify_identity_card.domain.model.DocumentType
 object PromptTemplates {
 
     private fun rules() = """
-You are an OCR system.
-Extract information from the Vietnamese Citizen ID card image.
+You are a strict OCR engine for Vietnamese IDs.
+Read all visible text from the image and fill the JSON.
 
-Return ONLY valid JSON.
-Do NOT include markdown, explanation, or extra text.
+Return ONLY JSON, no markdown.
+
+If the image is not an ID card OR text is unreadable, return:
+{"error":"UNREADABLE_OR_NOT_ID"}
+
+Otherwise, you MUST extract as many fields as possible.
+Do not return all fields null.
+Use best effort even if some fields are uncertain.
 
 Fields:
 - idNumber
@@ -61,4 +67,36 @@ Trích xuất Hộ chiếu từ ảnh. JSON schema:
 }
 """.trimIndent()
     }
+
+    fun promptCccdFrontBack(): String = """
+You are a strict OCR engine for Vietnamese Citizen ID (CCCD).
+
+You will receive TWO images in this order:
+1) Front side of CCCD
+2) Back side of CCCD
+
+Extract information using BOTH sides.
+IssuePlace is under issueDate start with "CỤC TRƯỞNG ..."
+
+Return ONLY valid JSON. No markdown. No explanation.
+
+Schema:
+{
+  "idNumber": string|null,
+  "fullName": string|null,
+  "dateOfBirth": "dd/MM/yyyy"|null,
+  "gender": "MALE"|"FEMALE"|"OTHER"|null,
+  "nationality": string|null,
+  "placeOfOrigin": string|null,
+  "placeOfResidence": string|null,
+  "issueDate": "dd/MM/yyyy"|null,
+  "expiryDate": "dd/MM/yyyy"|null,
+  "issuePlace": string|null
+}
+
+Rules:
+- Prefer values printed on the card.
+- If a field is missing, set null.
+""".trimIndent()
+
 }

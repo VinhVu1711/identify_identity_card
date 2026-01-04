@@ -1,20 +1,23 @@
 package com.vinh.identify_identity_card.utils
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
 
+private const val TAG = "FileUtils"
+
 //Create temporary Image File, used for prepare where to save the picture before take a picture
 fun createTempImageFile(context: Context): File {
-    //create a sub folder scan_images, nếu chưa có thì mkdirs để tạo
     val dir = File(context.cacheDir, "scan_images").apply { mkdirs() }
-    //Tạo 1 file ảnh mới với tên không trùng, trả về file(CHƯA CÓ DỮ LIỆU CHỈ LÀ ĐƯỜNG DẪN)
     return File(dir, "IMG_${System.currentTimeMillis()}_${UUID.randomUUID()}.jpg")
 }
+
 //Dùng khi chụp ảnh và lưu ảnh vào file
 fun createTempImageUri(context: Context, file: File): Uri {
     return FileProvider.getUriForFile(
@@ -23,21 +26,36 @@ fun createTempImageUri(context: Context, file: File): Uri {
         file
     )
 }
+
 //Chuyển URI thành File
 fun uriToTempFile(context: Context, uri: Uri): File {
-    //Công cụ đo dữ liệu
     val resolver = context.contentResolver
-    //Lấy MIME type
     val mime = resolver.getType(uri) ?: "image/jpeg"
-    //Dựa vào MIME lấy ra đuôi jpg
     val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime) ?: "jpg"
 
-    //Tạo file output cho cache
+    // ✅ Log kích thước ảnh (width x height) mà không decode full bitmap
+    try {
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        resolver.openInputStream(uri)?.use { input ->
+            BitmapFactory.decodeStream(input, null, opts)
+        }
+        val w = opts.outWidth
+        val h = opts.outHeight
+        Log.d(TAG, "uriToTempFile: mime=$mime ext=$ext size=${w}x$h uri=$uri")
+    } catch (e: Exception) {
+        Log.w(TAG, "uriToTempFile: cannot read image bounds, uri=$uri", e)
+    }
+
     val out = File(context.cacheDir, "upload_${System.currentTimeMillis()}.$ext")
-    //Mở luồng đọc dữ liệu ảnh từ Uri
+
     resolver.openInputStream(uri).use { input ->
         requireNotNull(input) { "Cannot open input stream" }
-        FileOutputStream(out).use { output -> input.copyTo(output) }//Copy toàn bộ dữ liệu qua file mới
+        FileOutputStream(out).use { output ->
+            input.copyTo(output)
+        }
     }
+
+    Log.d(TAG, "uriToTempFile: saved to ${out.absolutePath}, bytes=${out.length()}")
+
     return out
 }

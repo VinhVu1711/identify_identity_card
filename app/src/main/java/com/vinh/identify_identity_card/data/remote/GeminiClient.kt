@@ -13,7 +13,32 @@ class GeminiClient(
     private val apiKey: String,
     private val model: String = "gemini-2.5-flash"
 ) {
-    private val http = OkHttpClient()
+    private val http = OkHttpClient.Builder()
+        .eventListener(object : okhttp3.EventListener() {
+            override fun callStart(call: okhttp3.Call) {
+                Log.d("GeminiNet", "callStart: ${call.request().url}")
+            }
+            override fun dnsStart(call: okhttp3.Call, domainName: String) {
+                Log.d("GeminiNet", "dnsStart: $domainName")
+            }
+            override fun connectStart(call: okhttp3.Call, inetSocketAddress: java.net.InetSocketAddress, proxy: java.net.Proxy) {
+                Log.d("GeminiNet", "connectStart: $inetSocketAddress proxy=$proxy")
+            }
+            override fun secureConnectStart(call: okhttp3.Call) {
+                Log.d("GeminiNet", "TLS start")
+            }
+            override fun secureConnectEnd(call: okhttp3.Call, handshake: okhttp3.Handshake?) {
+                Log.d("GeminiNet", "TLS end: ${handshake?.tlsVersion}")
+            }
+            override fun callFailed(call: okhttp3.Call, ioe: java.io.IOException) {
+                Log.e("GeminiNet", "callFailed", ioe)
+            }
+            override fun callEnd(call: okhttp3.Call) {
+                Log.d("GeminiNet", "callEnd")
+            }
+        })
+        .build()
+
     private  val TAG = "GeminiClient"
     private val json = Json {
         ignoreUnknownKeys = true
@@ -34,100 +59,58 @@ class GeminiClient(
         return out.toByteArray()
     }
 
-    fun scan(prompt: String, imageFile: File, mimeType: String = "image/jpeg"): String {
-        val bytes = compressImageToJpeg(imageFile, maxSizeKB = 1024)
-//        val base64 = Base64.encodeToString(imageFile.readBytes(), Base64.NO_WRAP)
-        val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+    fun scanMulti(prompt: String, images: List<Pair<File, String>>): String {
+        val parts = mutableListOf<GeminiPart>()
+        parts += GeminiPart.text(prompt)
+
+        images.forEach { (file, mime) ->
+            val base64 = Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
+            parts += GeminiPart.inline(mime, base64)
+        }
+
         val req = GeminiGenerateRequest(
             contents = listOf(
                 GeminiContent(
                     role = "user",
-                    parts = listOf(
-                        GeminiPart(text = prompt),
-                        GeminiPart(
-                            inlineData = InlineData(
-                                mimeType = mimeType,
-                                data = base64
-                            )
-                        )
-                    )
+                    parts = parts
                 )
             ),
-            generationConfig = GeminiGenerationConfig(
-                temperature = 0.0,
-                maxOutputTokens = 1024
-            )
+            generationConfig = GeminiGenerationConfig(temperature = 0.0, maxOutputTokens = 1024)
         )
 
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
+        val bodyString = json.encodeToString(GeminiGenerateRequest.serializer(), req)
 
+        Log.d(TAG, "REQUEST JSON first800:\n${bodyString.take(800)}")
 
-        val url =
-            "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
-
-        val body = json.encodeToString(GeminiGenerateRequest.serializer(), req)
-            .toRequestBody("application/json".toMediaType())
-
-        val request = Request.Builder().url(url).post(body).build()
-
-//        http.newCall(request).execute().use { resp ->
-//            if (!resp.isSuccessful) throw IllegalStateException("Gemini error ${resp.code}: ${resp.message}")
-//            val raw = resp.body?.string().orEmpty()
-//            val parsed = json.decodeFromString(GeminiGenerateResponse.serializer(), raw)
-//
-//            val text = parsed.candidates.firstOrNull()
-//                ?.content?.parts
-//                ?.firstOrNull { it is GeminiPart.TextPart }
-//                ?.let { (it as GeminiPart.TextPart).text }
-//                .orEmpty()
-//
-//            return stripMarkdown(text)
-//        }
-
+        val request = Request.Builder()
+            .url(url)
+            .post(bodyString.toRequestBody("application/json".toMediaType()))
+            .build()
 
         http.newCall(request).execute().use { resp ->
             val rawBody = resp.body?.string().orEmpty()
-
-            // ✅ safe URL (che key)
-            val safeUrl = url.replace(Regex("key=[^&]+"), "key=***")
-
-            // ✅ log meta
-            Log.d(TAG, "➡️ REQUEST: $safeUrl")
-            Log.d(TAG, "   model=$model mimeType=$mimeType imageBytes=${imageFile.length()} base64Len=${base64.length}")
-
-            // ✅ log request JSON preview (nếu bạn có bodyString)
-            // Log.d(TAG, "   requestJson=${bodyString.take(400)}")
-
-            Log.d(TAG, "⬅️ RESPONSE: HTTP ${resp.code} ${resp.message}")
+            Log.d(TAG, "HTTP ${resp.code} ${resp.message}")
+            Log.d(TAG, "BODY first800:\n${rawBody.take(800)}")
 
             if (!resp.isSuccessful) {
-                // ✅ in body lỗi (cực quan trọng)
-                Log.e(TAG, "❌ ERROR BODY (first 1500 chars):\n${rawBody.take(1500)}")
-                throw IllegalStateException(
-                    "Gemini error ${resp.code}: ${resp.message}\n${rawBody.take(3000)}"
-                )
+                throw IllegalStateException("Gemini error ${resp.code}: ${resp.message}\n$rawBody")
             }
-
-            // ✅ body OK preview
-            Log.d(TAG, "✅ OK BODY (first 600 chars):\n${rawBody.take(600)}")
 
             val parsed = json.decodeFromString(GeminiGenerateResponse.serializer(), rawBody)
 
-            // ✅ extract text theo model mới (GeminiPart.text)
             val text = parsed.candidates.firstOrNull()
                 ?.content?.parts
-                ?.firstOrNull { !it.text.isNullOrBlank() }
+                ?.firstOrNull { it.text != null }
                 ?.text
                 .orEmpty()
 
-            if (text.isBlank()) {
-                Log.w(TAG, "⚠️ No text found in response candidates.")
-            }
-
             return stripMarkdown(text)
         }
-
-
     }
+
+
+
 
     private fun stripMarkdown(text: String): String {
         val t = text.trim()

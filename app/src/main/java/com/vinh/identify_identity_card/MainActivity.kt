@@ -24,8 +24,7 @@ import com.vinh.identify_identity_card.ui.theme.Identify_Identity_CardTheme
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.vinh.identify_identity_card.BuildConfig
-
-
+import android.util.Log
 
 
 class MainActivity : ComponentActivity() {
@@ -59,6 +58,7 @@ class MainActivity : ComponentActivity() {
                 val geminiClient = remember { com.vinh.identify_identity_card.data.remote.GeminiClient(BuildConfig.GEMINI_API_KEY) }
                 val scanRepo = remember { com.vinh.identify_identity_card.data.repo.ScanRepository(geminiClient) }
                 val scanViewModel = remember { com.vinh.identify_identity_card.ui.scan.ScanViewModel(scanRepo, repository) }
+                Log.d("KEYCHECK", "GEMINI_API_KEY len=${BuildConfig.GEMINI_API_KEY.length}")
 
 
                 Scaffold(modifier = Modifier.fillMaxSize())
@@ -77,7 +77,7 @@ class MainActivity : ComponentActivity() {
                                 onHistory = {
                                     navController.navigate(Screen.History.route)
                                 },
-                                onScan = { navController.navigate(Screen.ScanEntry.route) }
+                                onScan = { navController.navigate(Screen.ScanUpload.route) }
                             )
                         }
 
@@ -89,20 +89,20 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.History.route) {
                             HistoryScreen(vm = historyViewModel, onBack = {navController.popBackStack()})
                         }
-                        composable(
-                            route = "${Screen.ScanCapture.route}/{source}",
-                            arguments = listOf(navArgument("source") { type = NavType.StringType })
-                        ) { entry ->
-                            val sourceStr = entry.arguments?.getString("source") ?: "GALLERY"
-                            val source = com.vinh.identify_identity_card.ui.scan.ScanSource.valueOf(sourceStr)
-
-                            com.vinh.identify_identity_card.ui.scan.ScanCaptureScreen(
-                                vm = scanViewModel,
-                                source = source,
-                                onGoResult = { navController.navigate(Screen.ScanResult.route) },
-                                onBack = { navController.popBackStack() }
-                            )
-                        }
+//                        composable(
+//                            route = "${Screen.ScanCapture.route}/{source}",
+//                            arguments = listOf(navArgument("source") { type = NavType.StringType })
+//                        ) { entry ->
+//                            val sourceStr = entry.arguments?.getString("source") ?: "GALLERY"
+//                            val source = com.vinh.identify_identity_card.ui.scan.ScanSource.valueOf(sourceStr)
+//
+//                            com.vinh.identify_identity_card.ui.scan.ScanCaptureScreen(
+//                                vm = scanViewModel,
+//                                source = source,
+//                                onGoResult = { navController.navigate(Screen.ScanResult.route) },
+//                                onBack = { navController.popBackStack() }
+//                            )
+//                        }
                         composable(Screen.ScanResult.route) {
                             com.vinh.identify_identity_card.ui.scan.ScanResultScreen(
                                 vm = scanViewModel,
@@ -115,16 +115,19 @@ class MainActivity : ComponentActivity() {
                                 onBack = { navController.popBackStack() }
                             )
                         }
-
-                        composable(Screen.ScanEntry.route) {
-                            com.vinh.identify_identity_card.ui.scan.ScanEntryScreen(
+                        composable(Screen.ScanUpload.route) {
+                            com.vinh.identify_identity_card.ui.scan.ScanUploadScreen(
                                 vm = scanViewModel,
-                                onNextToCapture = { source ->
-                                    navController.navigate("${Screen.ScanCapture.route}/$source")
+                                onGoResult = {
+                                    navController.navigate(Screen.ScanResult.route)
                                 },
-                                onBack = { navController.popBackStack() }
+                                onBack = {
+                                    navController.popBackStack()
+                                }
                             )
                         }
+
+
 
                     }
                 }
