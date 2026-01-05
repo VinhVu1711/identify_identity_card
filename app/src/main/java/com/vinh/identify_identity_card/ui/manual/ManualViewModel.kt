@@ -61,9 +61,9 @@ class ManualViewModel(
         identityCardForm = identityCardForm.copy(dateOfBirth = v)
 
         // ✅ auto set expiry = DOB + 25 years (default)
-        if (!IDENTITYCARDExpiryManuallySet) {
-            identityCardForm = identityCardForm.copy(expiryDate = addYears(v, 25))
-        }
+//        if (!IDENTITYCARDExpiryManuallySet) {
+//            identityCardForm = identityCardForm.copy(expiryDate = addYears(v, 25))
+//        }
     }
 
     fun identityCardGender(v: Gender) { identityCardForm = identityCardForm.copy(gender = v) }

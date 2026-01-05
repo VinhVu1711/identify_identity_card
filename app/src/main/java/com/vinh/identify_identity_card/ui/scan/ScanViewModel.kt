@@ -161,21 +161,38 @@ var frontUri by mutableStateOf<Uri?>(null)
         clearPickedImages()
     }
     fun scanPassportOne(context: Context, onSuccess: () -> Unit) {
-        val pUri = passportUri ?: run { error = "Chưa chọn ảnh passport"; return }
+        val pUri = passportUri ?: run {
+            error = "Chưa chọn ảnh passport"
+            Log.w(TAG, "scanPassportOne: passportUri is null")
+            return
+        }
 
         viewModelScope.launch {
             try {
                 isLoading = true
                 error = null
 
-                val mime = context.contentResolver.getType(pUri) ?: "image/jpeg"
-                val file = withContext(Dispatchers.IO) { uriToTempFile(context, pUri) }
+                Log.d(TAG, "START scanPassportOne uri=$pUri")
 
+                val mime = context.contentResolver.getType(pUri) ?: "image/jpeg"
+                Log.d(TAG, "mimeType=$mime")
+
+                val file = withContext(Dispatchers.IO) {
+                    Log.d(TAG, "uriToTempFile begin")
+                    uriToTempFile(context, pUri).also {
+                        Log.d(TAG, "tempFile=${it.absolutePath} size=${it.length()} bytes")
+                    }
+                }
+
+                Log.d(TAG, "Calling scanRepo.scanPassportOne(...)")
                 val raw = withContext(Dispatchers.IO) {
                     scanRepo.scanPassportOne(file, mime)
                 }
 
+                Log.d(TAG, "Gemini raw first300=${raw.take(300)}")
+
                 val dto = json.decodeFromString(PassportScanDto.serializer(), raw)
+                Log.d(TAG, "dto=$dto")
 
                 val mapped = PassportInfo(
                     idNumber = dto.idNumber,
@@ -189,12 +206,18 @@ var frontUri by mutableStateOf<Uri?>(null)
                     issuingAuthority = dto.issuingAuthority
                 )
 
+                Log.d(TAG, "mapped=$mapped")
+
                 passportForm = mapped
+                Log.d(TAG, "PASS -> navigate")
                 onSuccess()
+
             } catch (e: Exception) {
+                Log.e(TAG, "scanPassportOne FAILED", e)
                 error = "Scan thất bại: ${e.message}"
             } finally {
                 isLoading = false
+                Log.d(TAG, "END scanPassportOne isLoading=false")
             }
         }
     }

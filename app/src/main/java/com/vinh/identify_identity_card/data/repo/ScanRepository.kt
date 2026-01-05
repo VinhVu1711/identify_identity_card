@@ -32,7 +32,8 @@ fun scanCccdFrontBack(front: File, frontMime: String, back: File, backMime: Stri
 }
     fun scanPassportOne(file: File, mime: String): String {
         val prompt = PromptTemplates.prompt(DocumentType.PASSPORT)
-        return gemini.scanMulti(prompt, listOf(file to mime))
+        Log.d(TAG, "scanPassportOne file=${file.name} size=${file.length()} mime=$mime promptLen=${prompt.length}")
+        return gemini.scan(prompt, file, mime)
     }
 
 

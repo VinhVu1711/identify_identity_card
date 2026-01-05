@@ -16,6 +16,8 @@ If the image is not an ID card OR text is unreadable, return:
 Otherwise, you MUST extract as many fields as possible.
 Do not return all fields null.
 Use best effort even if some fields are uncertain.
+All field must return in Vietnamese
+
 
 Fields:
 - idNumber
@@ -53,6 +55,7 @@ Trích xuất CCCD Việt Nam từ ảnh. JSON schema:
 
         DocumentType.PASSPORT -> """
 ${rules()}
+idNumber of Passport is GCMND(ID card N) 
 Trích xuất Hộ chiếu từ ảnh. JSON schema:
 {
   "idNumber": string|null,
@@ -77,6 +80,7 @@ You will receive TWO images in this order:
 
 Extract information using BOTH sides.
 IssuePlace is under issueDate start with "CỤC TRƯỞNG ..."
+
 
 Return ONLY valid JSON. No markdown. No explanation.
 
